@@ -1,0 +1,29 @@
+{
+  "name": "notedoc-webui",
+  "version": "1.0.0",
+  "description": "Next.js web UI for entering metadata and source links for NoteDoc notes",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "nextjs",
+    "notedoc",
+    "note-taking"
+  ],
+  "author": "NoteDoc Web UI",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "next": "16.2.11",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "12.12.0",
+    "@types/react": "19.0.7"
+  }
+}
