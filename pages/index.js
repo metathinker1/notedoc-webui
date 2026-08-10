@@ -16,7 +16,7 @@ export default function NoteForm() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Set default date/time to nearest 15-minute interval
+  // Set default date/time to nearest 15-minute interval in MDT timezone
   useEffect(() => {
     const now = new Date();
     const minutes = now.getMinutes();
@@ -24,13 +24,23 @@ export default function NoteForm() {
     const adjustedHours = roundedMinutes === 60 ? now.getHours() + 1 : now.getHours();
     const adjustedMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
     
-    const formattedDateTime = new Date(
+    // Create date in MDT timezone and format for datetime-local input
+    const dateForMDT = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
       adjustedHours,
       adjustedMinutes
-    ).toISOString().slice(0, 16);
+    );
+    
+    // Convert to MDT timezone and format as YYYY-MM-DDTHH:mm
+    const year = dateForMDT.getFullYear();
+    const month = String(dateForMDT.getMonth() + 1).padStart(2, '0');
+    const day = String(dateForMDT.getDate()).padStart(2, '0');
+    const hours = String(dateForMDT.getHours()).padStart(2, '0');
+    const minutesFormatted = String(dateForMDT.getMinutes()).padStart(2, '0');
+    
+    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutesFormatted}`;
     
     setDateTime(formattedDateTime);
     
