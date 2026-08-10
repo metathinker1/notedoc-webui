@@ -8,8 +8,15 @@ export default function NoteForm() {
   const [noteDocPath, setNoteDocPath] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [noteDocFiles, setNoteDocFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filteredFiles, setFilteredFiles] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Set default date/time to nearest 15-minute interval
+  // Set default date/time to nearest 15-minute interval in MDT timezone
   useEffect(() => {
     const now = new Date();
     const minutes = now.getMinutes();
@@ -17,13 +24,23 @@ export default function NoteForm() {
     const adjustedHours = roundedMinutes === 60 ? now.getHours() + 1 : now.getHours();
     const adjustedMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
     
-    const formattedDateTime = new Date(
+    // Create date in MDT timezone and format for datetime-local input
+    const dateForMDT = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
       adjustedHours,
       adjustedMinutes
-    ).toISOString().slice(0, 16);
+    );
+    
+    // Convert to MDT timezone and format as YYYY-MM-DDTHH:mm
+    const year = dateForMDT.getFullYear();
+    const month = String(dateForMDT.getMonth() + 1).padStart(2, '0');
+    const day = String(dateForMDT.getDate()).padStart(2, '0');
+    const hours = String(dateForMDT.getHours()).padStart(2, '0');
+    const minutesFormatted = String(dateForMDT.getMinutes()).padStart(2, '0');
+    
+    const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutesFormatted}`;
     
     setDateTime(formattedDateTime);
     
@@ -32,6 +49,43 @@ export default function NoteForm() {
       setNoteDocPath(process.env.NOTE_DOC_REPO_PATH || '/default/note-doc/path');
     }
   }, []);
+
+  // Fetch NoteDoc files on component mount
+  useEffect(() => {
+    const fetchNoteDocFiles = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/note-doc-files');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setNoteDocFiles(data.files || []);
+        setFilteredFiles(data.files || []);
+      } catch (err) {
+        console.error('Failed to fetch NoteDoc files:', err);
+        setError('Failed to load NoteDoc files');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNoteDocFiles();
+  }, []);
+
+  // Filter files based on search term
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredFiles(noteDocFiles);
+    } else {
+      const filtered = noteDocFiles.filter(file => 
+        file.entityName.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredFiles(filtered);
+    }
+  }, [searchTerm, noteDocFiles]);
 
   const addSourceLink = () => {
     setSourceLinks([...sourceLinks, '']);
@@ -51,6 +105,16 @@ export default function NoteForm() {
     setSourceLinks(newLinks);
   };
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setShowSuggestions(true);
+  };
+
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+    setShowSuggestions(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -62,7 +126,9 @@ export default function NoteForm() {
         title,
         description,
         sourceLinks: sourceLinks.filter(link => link.trim() !== ''),
-        noteDocPath: noteDocPath || '/default/note-doc/path'
+        noteDocPath: selectedFile 
+          ? `${noteDocPath}/${selectedFile.entityType}.${selectedFile.entityName}.${selectedFile.entityAspect}` 
+          : noteDocPath
       };
 
       // Simulate API call
@@ -75,6 +141,7 @@ export default function NoteForm() {
       setTitle('');
       setDescription('');
       setSourceLinks(['']);
+      setSelectedFile(null);
     } catch (error) {
       console.error('Error submitting note:', error);
     } finally {
@@ -103,6 +170,75 @@ export default function NoteForm() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 required
               />
+            </div>
+
+            {/* NoteDoc Repository Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                NoteDoc Repository
+              </label>
+              
+              {loading ? (
+                <div className="p-4 text-center text-gray-500">Loading NoteDoc files...</div>
+              ) : error ? (
+                <div className="p-4 text-center text-red-500">{error}</div>
+              ) : (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    placeholder="Search for NoteDoc files..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  
+                  {showSuggestions && filteredFiles.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredFiles.map((file) => (
+                        <div
+                          key={file.id}
+                          onClick={() => handleFileSelect(file)}
+                          className="px-4 py-2 hover:bg-blue-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium">{file.entityName}</div>
+                          <div className="text-sm text-gray-600">
+                            {file.entityType} • {file.entityAspect}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedFile && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-md border border-blue-200">
+                  <div className="font-medium text-blue-800">Selected NoteDoc File:</div>
+                  <div className="text-sm mt-2">
+                    {selectedFile.entityType}.{selectedFile.entityName}.{selectedFile.entityAspect}
+                  </div>
+                </div>
+              )}
+              
+              {/* Matching NoteDoc Files List */}
+              <div className="mt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Matching NoteDoc Files:</h3>
+                <div className="bg-gray-50 rounded-md p-2 max-h-40 overflow-y-auto w-full">
+                  {filteredFiles.length > 0 ? (
+                    <ul className="space-y-1 w-full">
+                      {filteredFiles.map((file) => (
+                        <li key={file.id} className="text-sm p-2 hover:bg-gray-100 rounded cursor-pointer w-full whitespace-nowrap overflow-hidden text-ellipsis" onClick={() => handleFileSelect(file)}>
+                          {file.entityType}.{file.entityName}.{file.entityAspect}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-500 p-2">No matching files found</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Source Links Section */}
