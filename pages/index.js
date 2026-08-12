@@ -46,11 +46,6 @@ export default function NoteForm() {
     const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutesFormatted}`;
     
     setDateTime(formattedDateTime);
-    
-    // Set NoteDoc path from environment variable (only on client-side)
-    if (typeof window !== 'undefined') {
-      setNoteDocPath(process.env.NOTE_DOC_REPO_PATH || '/default/note-doc/path');
-    }
   }, []);
 
   // Fetch NoteDoc files on component mount
@@ -59,12 +54,19 @@ export default function NoteForm() {
       try {
         setLoading(true);
         const response = await fetch('/api/note-doc-files');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const data = await response.json();
+
+        // The configured repo path is server-only (NOTE_DOC_REPO_PATH isn't
+        // exposed to the client), so read it from the API response instead -
+        // it's included whether the request succeeded or failed.
+        if (data.path) {
+          setNoteDocPath(data.path);
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        }
+
         setNoteDocFiles(data.files || []);
         setFilteredFiles(data.files || []);
       } catch (err) {
