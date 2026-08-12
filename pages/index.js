@@ -12,6 +12,7 @@ export default function NoteForm({ noteTemplate }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
   const [sourceLink, setSourceLink] = useState('');
+  const [slackChannel, setSlackChannel] = useState('');
   const [noteDocPath, setNoteDocPath] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -254,6 +255,21 @@ export default function NoteForm({ noteTemplate }) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 placeholder="https://example.com"
                 minLength="10"
+              />
+            </div>
+
+            {/* Slack Channel Section */}
+            <div>
+              <label htmlFor="slackChannel" className="block text-sm font-medium text-gray-700 mb-1">
+                Slack Channel
+              </label>
+              <input
+                type="text"
+                id="slackChannel"
+                value={slackChannel}
+                onChange={(e) => setSlackChannel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="#channel-name"
               />
             </div>
 
