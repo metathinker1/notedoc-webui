@@ -3,12 +3,13 @@ import fs from 'fs';
 import path from 'path';
 
 export async function getStaticProps() {
-  const templatePath = path.join(process.cwd(), 'resources', 'templates', 'add-note-template-1.txt');
-  const noteTemplate = fs.readFileSync(templatePath, 'utf-8');
-  return { props: { noteTemplate } };
+  const templatesDir = path.join(process.cwd(), 'resources', 'templates');
+  const noteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-1.txt'), 'utf-8');
+  const slackNoteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-2.txt'), 'utf-8');
+  return { props: { noteTemplate, slackNoteTemplate } };
 }
 
-export default function NoteForm({ noteTemplate }) {
+export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
   const [sourceLink, setSourceLink] = useState('');
@@ -118,7 +119,10 @@ export default function NoteForm({ noteTemplate }) {
       const [YYYY, MM, DD] = datePart.split('-');
       const [hh, mm] = timePart.split(':');
 
-      const noteText = noteTemplate
+      const hasSlackChannel = slackChannel.trim() !== '';
+      const template = hasSlackChannel ? slackNoteTemplate : noteTemplate;
+
+      let noteText = template
         .replaceAll('{{YYYY}}', YYYY)
         .replaceAll('{{MM}}', MM)
         .replaceAll('{{DD}}', DD)
@@ -126,6 +130,10 @@ export default function NoteForm({ noteTemplate }) {
         .replaceAll('{{mm}}', mm)
         .replaceAll('{{link-type}}', linkType)
         .replaceAll('{{url}}', sourceLink);
+
+      if (hasSlackChannel) {
+        noteText = noteText.replaceAll('{{#slack-channel}}', slackChannel);
+      }
 
       setGeneratedNote(noteText);
       setSubmitSuccess(true);

@@ -1,0 +1,7 @@
+<{{YYYY}}.{{MM}}.{{DD}} {{hh}}:{{mm}}>
+
+{{{link-type}}:Slack:#{{#slack-channel}}:
+{URL={{url}}}
+
+}\
+
