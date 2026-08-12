@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
+import fs from 'fs';
+import path from 'path';
 
-export default function NoteForm() {
+export async function getStaticProps() {
+  const templatePath = path.join(process.cwd(), 'resources', 'templates', 'add-note-template-1.txt');
+  const noteTemplate = fs.readFileSync(templatePath, 'utf-8');
+  return { props: { noteTemplate } };
+}
+
+export default function NoteForm({ noteTemplate }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
   const [sourceLinks, setSourceLinks] = useState(['']);
   const [noteDocPath, setNoteDocPath] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
   const [generatedNote, setGeneratedNote] = useState('');
@@ -118,45 +125,39 @@ export default function NoteForm() {
     setShowSuggestions(false);
   };
 
-  const handleSubmit = async (e) => {
+  const handleCreateNote = (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
     setSubmitSuccess(false);
     setSubmitError(null);
 
     try {
-      const noteData = {
-        dateTime,
-        linkType,
-        sourceLinks: sourceLinks.filter(link => link.trim() !== ''),
-        noteDocPath: selectedFile
-          ? `${noteDocPath}/${selectedFile.entityType}.${selectedFile.entityName}.${selectedFile.entityAspect}`
-          : noteDocPath
-      };
+      const [datePart, timePart] = dateTime.split('T');
+      const [YYYY, MM, DD] = datePart.split('-');
+      const [hh, mm] = timePart.split(':');
 
-      const response = await fetch('/api/submit-note', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(noteData),
-      });
+      const urls = sourceLinks.filter(link => link.trim() !== '');
+      const linksForTemplate = urls.length > 0 ? urls : [''];
 
-      const result = await response.json();
+      // One rendered copy of the template per source link (the template
+      // has a single {{url}} slot, so multiple links repeat the whole block).
+      const noteText = linksForTemplate
+        .map(url =>
+          noteTemplate
+            .replaceAll('{{YYYY}}', YYYY)
+            .replaceAll('{{MM}}', MM)
+            .replaceAll('{{DD}}', DD)
+            .replaceAll('{{hh}}', hh)
+            .replaceAll('{{mm}}', mm)
+            .replaceAll('{{link-type}}', linkType)
+            .replaceAll('{{url}}', url)
+        )
+        .join('\n');
 
-      if (!response.ok) {
-        throw new Error(result.error || `HTTP error! status: ${response.status}`);
-      }
-
+      setGeneratedNote(noteText);
       setSubmitSuccess(true);
-      setGeneratedNote(JSON.stringify(result.note, null, 2));
-
-      // Reset form after successful submission
-      setSourceLinks(['']);
-      setSelectedFile(null);
     } catch (error) {
-      console.error('Error submitting note:', error);
-      setSubmitError(error.message || 'Failed to submit note');
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error generating note text:', error);
+      setSubmitError('Failed to generate note text');
     }
   };
 
@@ -167,7 +168,7 @@ export default function NoteForm() {
           <h1 className="text-3xl font-bold text-gray-800 mb-2">NoteDoc Note Entry</h1>
           <p className="text-gray-600 mb-6">Enter metadata and source links for your note</p>
           
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleCreateNote} className="space-y-6">
             {/* Date and Time Field */}
             <div>
               <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 mb-1">
@@ -309,12 +310,9 @@ export default function NoteForm() {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`px-6 py-3 rounded-md font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                  isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
+                className="px-6 py-3 rounded-md font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                {isSubmitting ? 'Creating...' : 'Create Note'}
+                Create Note
               </button>
             </div>
           </form>
@@ -323,16 +321,19 @@ export default function NoteForm() {
           {generatedNote && (
             <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-2">Generated Note:</h3>
-              <div className="p-4 bg-gray-100 border border-gray-300 rounded-md overflow-auto max-h-60">
-                <pre className="whitespace-pre-wrap break-words">{generatedNote}</pre>
-              </div>
+              <textarea
+                readOnly
+                value={generatedNote}
+                rows={Math.max(10, generatedNote.split('\n').length + 2)}
+                className="w-full p-4 bg-gray-100 border border-gray-300 rounded-md font-mono text-sm"
+              />
             </div>
           )}
 
           {/* Success Message */}
           {submitSuccess && (
             <div className="mt-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-md">
-              <p>Note created successfully!</p>
+              <p>Note text generated below.</p>
             </div>
           )}
 
