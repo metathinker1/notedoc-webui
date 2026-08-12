@@ -11,7 +11,7 @@ export async function getStaticProps() {
 export default function NoteForm({ noteTemplate }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
-  const [sourceLinks, setSourceLinks] = useState(['']);
+  const [sourceLink, setSourceLink] = useState('');
   const [noteDocPath, setNoteDocPath] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -97,24 +97,6 @@ export default function NoteForm({ noteTemplate }) {
     }
   }, [searchTerm, noteDocFiles]);
 
-  const addSourceLink = () => {
-    setSourceLinks([...sourceLinks, '']);
-  };
-
-  const removeSourceLink = (index) => {
-    if (sourceLinks.length > 1) {
-      const newLinks = [...sourceLinks];
-      newLinks.splice(index, 1);
-      setSourceLinks(newLinks);
-    }
-  };
-
-  const updateSourceLink = (index, value) => {
-    const newLinks = [...sourceLinks];
-    newLinks[index] = value;
-    setSourceLinks(newLinks);
-  };
-
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
     setShowSuggestions(true);
@@ -135,23 +117,14 @@ export default function NoteForm({ noteTemplate }) {
       const [YYYY, MM, DD] = datePart.split('-');
       const [hh, mm] = timePart.split(':');
 
-      const urls = sourceLinks.filter(link => link.trim() !== '');
-      const linksForTemplate = urls.length > 0 ? urls : [''];
-
-      // One rendered copy of the template per source link (the template
-      // has a single {{url}} slot, so multiple links repeat the whole block).
-      const noteText = linksForTemplate
-        .map(url =>
-          noteTemplate
-            .replaceAll('{{YYYY}}', YYYY)
-            .replaceAll('{{MM}}', MM)
-            .replaceAll('{{DD}}', DD)
-            .replaceAll('{{hh}}', hh)
-            .replaceAll('{{mm}}', mm)
-            .replaceAll('{{link-type}}', linkType)
-            .replaceAll('{{url}}', url)
-        )
-        .join('\n');
+      const noteText = noteTemplate
+        .replaceAll('{{YYYY}}', YYYY)
+        .replaceAll('{{MM}}', MM)
+        .replaceAll('{{DD}}', DD)
+        .replaceAll('{{hh}}', hh)
+        .replaceAll('{{mm}}', mm)
+        .replaceAll('{{link-type}}', linkType)
+        .replaceAll('{{url}}', sourceLink);
 
       setGeneratedNote(noteText);
       setSubmitSuccess(true);
@@ -166,7 +139,7 @@ export default function NoteForm({ noteTemplate }) {
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">NoteDoc Note Entry</h1>
-          <p className="text-gray-600 mb-6">Enter metadata and source links for your note</p>
+          <p className="text-gray-600 mb-6">Enter metadata and a source link for your note</p>
           
           <form onSubmit={handleCreateNote} className="space-y-6">
             {/* Date and Time Field */}
@@ -268,42 +241,20 @@ export default function NoteForm({ noteTemplate }) {
               </div>
             </div>
 
-            {/* Source Links Section */}
+            {/* Source Link Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Source Links
+              <label htmlFor="sourceLink" className="block text-sm font-medium text-gray-700 mb-1">
+                Source Link
               </label>
-              <div className="space-y-2">
-                {sourceLinks.map((link, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <input
-                      type="url"
-                      value={link}
-                      onChange={(e) => updateSourceLink(index, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 min-w-[500px]"
-                      placeholder="https://example.com ----"
-                      minLength="10"
-                      style={{ minWidth: '500px' }}
-                    />
-                    {sourceLinks.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSourceLink(index)}
-                        className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addSourceLink}
-                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Add Source Link
-              </button>
+              <input
+                type="url"
+                id="sourceLink"
+                value={sourceLink}
+                onChange={(e) => setSourceLink(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="https://example.com"
+                minLength="10"
+              />
             </div>
 
             {/* Submit Button */}

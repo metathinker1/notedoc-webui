@@ -1,11 +1,11 @@
 # NoteDoc Web UI
 
-A simple Next.js application for entering metadata and source links for notes to be added to a NoteDoc.
+A simple Next.js application for entering metadata and a source link for notes to be added to a NoteDoc.
 
 ## Features
 
 - Date & time input with default value snapped to nearest 15-minute interval
-- Source link management (add/remove multiple links)
+- Source link entry
 - Configuration for NoteDoc repository directory location (via environment variable)
 
 ## Getting Started
@@ -51,4 +51,4 @@ notedoc-webui/
 
 The date/time field defaults to the nearest 15-minute interval when the form loads. This ensures consistent timestamp formatting for notes in the NoteDoc system.
 
-Source links can be added or removed dynamically to support multiple reference points for each note.
+Each note carries a single source link.
