@@ -9,6 +9,8 @@ export default function NoteForm() {
   const [noteDocPath, setNoteDocPath] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [generatedNote, setGeneratedNote] = useState('');
   const [noteDocFiles, setNoteDocFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [filteredFiles, setFilteredFiles] = useState([]);
@@ -119,26 +121,36 @@ export default function NoteForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+    setSubmitSuccess(false);
+    setSubmitError(null);
+
     try {
-      // In a real implementation, this would send data to the backend
       const noteData = {
         dateTime,
         title,
         description,
         linkType,
         sourceLinks: sourceLinks.filter(link => link.trim() !== ''),
-        noteDocPath: selectedFile 
-          ? `${noteDocPath}/${selectedFile.entityType}.${selectedFile.entityName}.${selectedFile.entityAspect}` 
+        noteDocPath: selectedFile
+          ? `${noteDocPath}/${selectedFile.entityType}.${selectedFile.entityName}.${selectedFile.entityAspect}`
           : noteDocPath
       };
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Note data to be submitted:', noteData);
+      const response = await fetch('/api/submit-note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(noteData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      }
+
       setSubmitSuccess(true);
-      
+      setGeneratedNote(JSON.stringify(result.note, null, 2));
+
       // Reset form after successful submission
       setTitle('');
       setDescription('');
@@ -146,6 +158,7 @@ export default function NoteForm() {
       setSelectedFile(null);
     } catch (error) {
       console.error('Error submitting note:', error);
+      setSubmitError(error.message || 'Failed to submit note');
     } finally {
       setIsSubmitting(false);
     }
@@ -334,15 +347,32 @@ export default function NoteForm() {
                   isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Note'}
+                {isSubmitting ? 'Creating...' : 'Create Note'}
               </button>
             </div>
           </form>
 
+          {/* Generated Note Display */}
+          {generatedNote && (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium text-gray-800 mb-2">Generated Note:</h3>
+              <div className="p-4 bg-gray-100 border border-gray-300 rounded-md overflow-auto max-h-60">
+                <pre className="whitespace-pre-wrap break-words">{generatedNote}</pre>
+              </div>
+            </div>
+          )}
+
           {/* Success Message */}
           {submitSuccess && (
             <div className="mt-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-md">
-              <p>Note submitted successfully!</p>
+              <p>Note created successfully!</p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {submitError && (
+            <div className="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+              <p>{submitError}</p>
             </div>
           )}
         </div>
