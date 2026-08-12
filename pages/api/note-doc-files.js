@@ -1,6 +1,7 @@
 // API route to fetch NoteDoc files from the repository
 import fs from 'fs';
 import path from 'path';
+import config from '../../config.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -8,9 +9,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get NoteDoc path from environment variable
-    const noteDocPath = process.env.NOTE_DOC_REPO_PATH || '/default/note-doc/path';
-    
+    const noteDocPath = config.noteDocRepoPath;
+
     // Check if the path exists
     if (!fs.existsSync(noteDocPath)) {
       return res.status(400).json({ 
@@ -49,9 +49,10 @@ export default async function handler(req, res) {
       })
       .filter(Boolean); // Remove any null entries
 
-    res.status(200).json({ 
+    res.status(200).json({
       files: noteDocFiles,
-      count: noteDocFiles.length
+      count: noteDocFiles.length,
+      path: noteDocPath
     });
   } catch (error) {
     console.error('Error reading NoteDoc files:', error);

@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
+import fs from 'fs';
+import path from 'path';
 
-export default function NoteForm() {
+export async function getStaticProps() {
+  const templatesDir = path.join(process.cwd(), 'resources', 'templates');
+  const noteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-1.txt'), 'utf-8');
+  const slackNoteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-2.txt'), 'utf-8');
+  return { props: { noteTemplate, slackNoteTemplate } };
+}
+
+export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
   const [dateTime, setDateTime] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [sourceLinks, setSourceLinks] = useState(['']);
+  const [linkType, setLinkType] = useState('DataLink');
+  const [sourceLink, setSourceLink] = useState('');
+  const [slackChannel, setSlackChannel] = useState('');
   const [noteDocPath, setNoteDocPath] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
+  const [generatedNote, setGeneratedNote] = useState('');
   const [noteDocFiles, setNoteDocFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [filteredFiles, setFilteredFiles] = useState([]);
@@ -43,11 +53,6 @@ export default function NoteForm() {
     const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutesFormatted}`;
     
     setDateTime(formattedDateTime);
-    
-    // Set NoteDoc path from environment variable (only on client-side)
-    if (typeof window !== 'undefined') {
-      setNoteDocPath(process.env.NOTE_DOC_REPO_PATH || '/default/note-doc/path');
-    }
   }, []);
 
   // Fetch NoteDoc files on component mount
@@ -56,12 +61,19 @@ export default function NoteForm() {
       try {
         setLoading(true);
         const response = await fetch('/api/note-doc-files');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
         const data = await response.json();
+
+        // The configured repo path is server-only (NOTE_DOC_REPO_PATH isn't
+        // exposed to the client), so read it from the API response instead -
+        // it's included whether the request succeeded or failed.
+        if (data.path) {
+          setNoteDocPath(data.path);
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP error! status: ${response.status}`);
+        }
+
         setNoteDocFiles(data.files || []);
         setFilteredFiles(data.files || []);
       } catch (err) {
@@ -87,24 +99,6 @@ export default function NoteForm() {
     }
   }, [searchTerm, noteDocFiles]);
 
-  const addSourceLink = () => {
-    setSourceLinks([...sourceLinks, '']);
-  };
-
-  const removeSourceLink = (index) => {
-    if (sourceLinks.length > 1) {
-      const newLinks = [...sourceLinks];
-      newLinks.splice(index, 1);
-      setSourceLinks(newLinks);
-    }
-  };
-
-  const updateSourceLink = (index, value) => {
-    const newLinks = [...sourceLinks];
-    newLinks[index] = value;
-    setSourceLinks(newLinks);
-  };
-
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
     setShowSuggestions(true);
@@ -115,37 +109,37 @@ export default function NoteForm() {
     setShowSuggestions(false);
   };
 
-  const handleSubmit = async (e) => {
+  const handleCreateNote = (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    
-    try {
-      // In a real implementation, this would send data to the backend
-      const noteData = {
-        dateTime,
-        title,
-        description,
-        sourceLinks: sourceLinks.filter(link => link.trim() !== ''),
-        noteDocPath: selectedFile 
-          ? `${noteDocPath}/${selectedFile.entityType}.${selectedFile.entityName}.${selectedFile.entityAspect}` 
-          : noteDocPath
-      };
+    setSubmitSuccess(false);
+    setSubmitError(null);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Note data to be submitted:', noteData);
+    try {
+      const [datePart, timePart] = dateTime.split('T');
+      const [YYYY, MM, DD] = datePart.split('-');
+      const [hh, mm] = timePart.split(':');
+
+      const hasSlackChannel = slackChannel.trim() !== '';
+      const template = hasSlackChannel ? slackNoteTemplate : noteTemplate;
+
+      let noteText = template
+        .replaceAll('{{YYYY}}', YYYY)
+        .replaceAll('{{MM}}', MM)
+        .replaceAll('{{DD}}', DD)
+        .replaceAll('{{hh}}', hh)
+        .replaceAll('{{mm}}', mm)
+        .replaceAll('{{link-type}}', linkType)
+        .replaceAll('{{url}}', sourceLink);
+
+      if (hasSlackChannel) {
+        noteText = noteText.replaceAll('{{#slack-channel}}', slackChannel);
+      }
+
+      setGeneratedNote(noteText);
       setSubmitSuccess(true);
-      
-      // Reset form after successful submission
-      setTitle('');
-      setDescription('');
-      setSourceLinks(['']);
-      setSelectedFile(null);
     } catch (error) {
-      console.error('Error submitting note:', error);
-    } finally {
-      setIsSubmitting(false);
+      console.error('Error generating note text:', error);
+      setSubmitError('Failed to generate note text');
     }
   };
 
@@ -154,9 +148,9 @@ export default function NoteForm() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">NoteDoc Note Entry</h1>
-          <p className="text-gray-600 mb-6">Enter metadata and source links for your note</p>
+          <p className="text-gray-600 mb-6">Enter metadata and a source link for your note</p>
           
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleCreateNote} className="space-y-6">
             {/* Date and Time Field */}
             <div>
               <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 mb-1">
@@ -164,12 +158,27 @@ export default function NoteForm() {
               </label>
               <input
                 type="datetime-local"
-                id="dateTime"
+                id="dateTime" 
                 value={dateTime}
                 onChange={(e) => setDateTime(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 required
               />
+            </div>
+
+            {/* Link Type Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Link Type
+              </label>
+              <select
+                value={linkType}
+                onChange={(e) => setLinkType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="DataLink">DataLink</option>
+                <option value="TextLink">TextLink</option>
+              </select>
             </div>
 
             {/* NoteDoc Repository Selection */}
@@ -241,62 +250,72 @@ export default function NoteForm() {
               </div>
             </div>
 
-            {/* Source Links Section */}
+            {/* Source Link Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Source Links
+              <label htmlFor="sourceLink" className="block text-sm font-medium text-gray-700 mb-1">
+                Source Link
               </label>
-              <div className="space-y-2">
-                {sourceLinks.map((link, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <input
-                      type="url"
-                      value={link}
-                      onChange={(e) => updateSourceLink(index, e.target.value)}
-                      className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 min-w-[500px]"
-                      placeholder="https://example.com ----"
-                      minLength="10"
-                      style={{ minWidth: '500px' }}
-                    />
-                    {sourceLinks.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSourceLink(index)}
-                        className="px-3 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addSourceLink}
-                className="mt-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                Add Source Link
-              </button>
+              <input
+                type="url"
+                id="sourceLink"
+                value={sourceLink}
+                onChange={(e) => setSourceLink(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="https://example.com"
+                minLength="10"
+              />
+            </div>
+
+            {/* Slack Channel Section */}
+            <div>
+              <label htmlFor="slackChannel" className="block text-sm font-medium text-gray-700 mb-1">
+                Slack Channel
+              </label>
+              <input
+                type="text"
+                id="slackChannel"
+                value={slackChannel}
+                onChange={(e) => setSlackChannel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="#channel-name"
+              />
             </div>
 
             {/* Submit Button */}
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className={`px-6 py-3 rounded-md font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                  isSubmitting ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                }`}
+                className="px-6 py-3 rounded-md font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                {isSubmitting ? 'Submitting...' : 'Submit Note'}
+                Create Note
               </button>
             </div>
           </form>
 
+          {/* Generated Note Display */}
+          {generatedNote && (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium text-gray-800 mb-2">Generated Note:</h3>
+              <textarea
+                readOnly
+                value={generatedNote}
+                rows={Math.max(10, generatedNote.split('\n').length + 2)}
+                className="w-full p-4 bg-gray-100 border border-gray-300 rounded-md font-mono text-sm"
+              />
+            </div>
+          )}
+
           {/* Success Message */}
           {submitSuccess && (
             <div className="mt-6 p-4 bg-green-100 border border-green-400 text-green-700 rounded-md">
-              <p>Note submitted successfully!</p>
+              <p>Note text generated below.</p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {submitError && (
+            <div className="mt-6 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
+              <p>{submitError}</p>
             </div>
           )}
         </div>
