@@ -10,4 +10,4 @@ const config = {
   timeSnapInterval: 15,
 };
 
-module.exports = config;
+export default config;
