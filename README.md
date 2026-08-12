@@ -5,7 +5,6 @@ A simple Next.js application for entering metadata and source links for notes to
 ## Features
 
 - Date & time input with default value snapped to nearest 15-minute interval
-- Title and description fields for note metadata
 - Source link management (add/remove multiple links)
 - Configuration for NoteDoc repository directory location (via environment variable)
 
