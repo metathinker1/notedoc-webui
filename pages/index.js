@@ -9,14 +9,19 @@ export async function getStaticProps() {
   const templatesDir = path.join(process.cwd(), 'resources', 'templates');
   const noteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-1.txt'), 'utf-8');
   const slackNoteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-2.txt'), 'utf-8');
-  return { props: { noteTemplate, slackNoteTemplate } };
+
+  const slackChannelsCsv = fs.readFileSync(path.join(process.cwd(), 'resources', 'slack-channels.csv'), 'utf-8');
+  const slackChannels = slackChannelsCsv.split('\n').map(line => line.trim()).filter(Boolean);
+
+  return { props: { noteTemplate, slackNoteTemplate, slackChannels } };
 }
 
-export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
+export default function NoteForm({ noteTemplate, slackNoteTemplate, slackChannels }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
   const [sourceLink, setSourceLink] = useState('');
   const [slackChannel, setSlackChannel] = useState('');
+  const [knownSlackChannels, setKnownSlackChannels] = useState(slackChannels);
   const [noteDocPath, setNoteDocPath] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -115,6 +120,22 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
     setShowSuggestions(false);
   };
 
+  const saveNewSlackChannel = async (channelName) => {
+    try {
+      const response = await fetch('/api/slack-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: channelName }),
+      });
+      const data = await response.json();
+      if (response.ok && data.added) {
+        setKnownSlackChannels(data.channels);
+      }
+    } catch (err) {
+      console.error('Failed to save new Slack channel:', err);
+    }
+  };
+
   const handleCreateNote = (e) => {
     e.preventDefault();
     setSubmitSuccess(false);
@@ -138,7 +159,16 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
         .replaceAll('{{url}}', sourceLink);
 
       if (hasSlackChannel) {
-        noteText = noteText.replaceAll('{{#slack-channel}}', slackChannel);
+        // The template already supplies the leading '#' as literal text.
+        const channelName = slackChannel.trim().replace(/^#/, '');
+        noteText = noteText.replaceAll('{{#slack-channel}}', channelName);
+
+        const isKnownChannel = knownSlackChannels.some(
+          name => name.toLowerCase() === channelName.toLowerCase()
+        );
+        if (!isKnownChannel) {
+          saveNewSlackChannel(channelName);
+        }
       }
 
       setGeneratedNote(noteText);
@@ -303,11 +333,18 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
               <input
                 type="text"
                 id="slackChannel"
+                list="slackChannelOptions"
                 value={slackChannel}
                 onChange={(e) => setSlackChannel(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="#channel-name"
+                placeholder="channel-name"
+                autoComplete="off"
               />
+              <datalist id="slackChannelOptions">
+                {knownSlackChannels.map((channel) => (
+                  <option key={channel} value={channel} />
+                ))}
+              </datalist>
             </div>
 
             {/* Submit Button */}
