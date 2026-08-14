@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import fs from 'fs';
 import path from 'path';
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+const MINUTE_OPTIONS = ['00', '15', '30', '45'];
+
 export async function getStaticProps() {
   const templatesDir = path.join(process.cwd(), 'resources', 'templates');
   const noteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-1.txt'), 'utf-8');
@@ -26,6 +29,9 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [datePart = '', timePart = '00:00'] = dateTime.split('T');
+  const [hourPart = '00', minutePart = '00'] = timePart.split(':');
+
   // Set default date/time to nearest 15-minute interval in MDT timezone
   useEffect(() => {
     const now = new Date();
@@ -34,7 +40,7 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
     const adjustedHours = roundedMinutes === 60 ? now.getHours() + 1 : now.getHours();
     const adjustedMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
     
-    // Create date in MDT timezone and format for datetime-local input
+    // Create date in MDT timezone and format for the date/hour/minute fields
     const dateForMDT = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -153,17 +159,40 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
           <form onSubmit={handleCreateNote} className="space-y-6">
             {/* Date and Time Field */}
             <div>
-              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 mb-1">
-                Date & Time
+              <label htmlFor="datePart" className="block text-sm font-medium text-gray-700 mb-1">
+                Date & Time (24-hour)
               </label>
-              <input
-                type="datetime-local"
-                id="dateTime" 
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="date"
+                  id="datePart"
+                  value={datePart}
+                  onChange={(e) => setDateTime(`${e.target.value}T${hourPart}:${minutePart}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+                <select
+                  aria-label="Hour"
+                  value={hourPart}
+                  onChange={(e) => setDateTime(`${datePart}T${e.target.value}:${minutePart}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {HOUR_OPTIONS.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <span className="text-gray-500">:</span>
+                <select
+                  aria-label="Minute"
+                  value={minutePart}
+                  onChange={(e) => setDateTime(`${datePart}T${hourPart}:${e.target.value}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {MINUTE_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Link Type Selector */}
