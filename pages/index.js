@@ -2,18 +2,26 @@ import { useState, useEffect } from 'react';
 import fs from 'fs';
 import path from 'path';
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+const MINUTE_OPTIONS = ['00', '15', '30', '45'];
+
 export async function getStaticProps() {
   const templatesDir = path.join(process.cwd(), 'resources', 'templates');
   const noteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-1.txt'), 'utf-8');
   const slackNoteTemplate = fs.readFileSync(path.join(templatesDir, 'add-note-template-2.txt'), 'utf-8');
-  return { props: { noteTemplate, slackNoteTemplate } };
+
+  const slackChannelsCsv = fs.readFileSync(path.join(process.cwd(), 'resources', 'slack-channels.csv'), 'utf-8');
+  const slackChannels = slackChannelsCsv.split('\n').map(line => line.trim()).filter(Boolean);
+
+  return { props: { noteTemplate, slackNoteTemplate, slackChannels } };
 }
 
-export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
+export default function NoteForm({ noteTemplate, slackNoteTemplate, slackChannels }) {
   const [dateTime, setDateTime] = useState('');
   const [linkType, setLinkType] = useState('DataLink');
   const [sourceLink, setSourceLink] = useState('');
   const [slackChannel, setSlackChannel] = useState('');
+  const [knownSlackChannels, setKnownSlackChannels] = useState(slackChannels);
   const [noteDocPath, setNoteDocPath] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -26,6 +34,9 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [datePart = '', timePart = '00:00'] = dateTime.split('T');
+  const [hourPart = '00', minutePart = '00'] = timePart.split(':');
+
   // Set default date/time to nearest 15-minute interval in MDT timezone
   useEffect(() => {
     const now = new Date();
@@ -34,7 +45,7 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
     const adjustedHours = roundedMinutes === 60 ? now.getHours() + 1 : now.getHours();
     const adjustedMinutes = roundedMinutes === 60 ? 0 : roundedMinutes;
     
-    // Create date in MDT timezone and format for datetime-local input
+    // Create date in MDT timezone and format for the date/hour/minute fields
     const dateForMDT = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -109,6 +120,22 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
     setShowSuggestions(false);
   };
 
+  const saveNewSlackChannel = async (channelName) => {
+    try {
+      const response = await fetch('/api/slack-channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: channelName }),
+      });
+      const data = await response.json();
+      if (response.ok && data.added) {
+        setKnownSlackChannels(data.channels);
+      }
+    } catch (err) {
+      console.error('Failed to save new Slack channel:', err);
+    }
+  };
+
   const handleCreateNote = (e) => {
     e.preventDefault();
     setSubmitSuccess(false);
@@ -132,7 +159,16 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
         .replaceAll('{{url}}', sourceLink);
 
       if (hasSlackChannel) {
-        noteText = noteText.replaceAll('{{#slack-channel}}', slackChannel);
+        // The template already supplies the leading '#' as literal text.
+        const channelName = slackChannel.trim().replace(/^#/, '');
+        noteText = noteText.replaceAll('{{#slack-channel}}', channelName);
+
+        const isKnownChannel = knownSlackChannels.some(
+          name => name.toLowerCase() === channelName.toLowerCase()
+        );
+        if (!isKnownChannel) {
+          saveNewSlackChannel(channelName);
+        }
       }
 
       setGeneratedNote(noteText);
@@ -153,17 +189,40 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
           <form onSubmit={handleCreateNote} className="space-y-6">
             {/* Date and Time Field */}
             <div>
-              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 mb-1">
-                Date & Time
+              <label htmlFor="datePart" className="block text-sm font-medium text-gray-700 mb-1">
+                Date & Time (24-hour)
               </label>
-              <input
-                type="datetime-local"
-                id="dateTime" 
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="date"
+                  id="datePart"
+                  value={datePart}
+                  onChange={(e) => setDateTime(`${e.target.value}T${hourPart}:${minutePart}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+                <select
+                  aria-label="Hour"
+                  value={hourPart}
+                  onChange={(e) => setDateTime(`${datePart}T${e.target.value}:${minutePart}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {HOUR_OPTIONS.map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+                <span className="text-gray-500">:</span>
+                <select
+                  aria-label="Minute"
+                  value={minutePart}
+                  onChange={(e) => setDateTime(`${datePart}T${hourPart}:${e.target.value}`)}
+                  className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {MINUTE_OPTIONS.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Link Type Selector */}
@@ -274,11 +333,18 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate }) {
               <input
                 type="text"
                 id="slackChannel"
+                list="slackChannelOptions"
                 value={slackChannel}
                 onChange={(e) => setSlackChannel(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="#channel-name"
+                placeholder="channel-name"
+                autoComplete="off"
               />
+              <datalist id="slackChannelOptions">
+                {knownSlackChannels.map((channel) => (
+                  <option key={channel} value={channel} />
+                ))}
+              </datalist>
             </div>
 
             {/* Submit Button */}
