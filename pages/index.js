@@ -33,6 +33,8 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate, slackChannel
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sublimeError, setSublimeError] = useState(null);
+  const [openingInSublime, setOpeningInSublime] = useState(false);
 
   const [datePart = '', timePart = '00:00'] = dateTime.split('T');
   const [hourPart = '00', minutePart = '00'] = timePart.split(':');
@@ -118,6 +120,30 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate, slackChannel
   const handleFileSelect = (file) => {
     setSelectedFile(file);
     setShowSuggestions(false);
+  };
+
+  const handleOpenInSublime = async (fileName) => {
+    setOpeningInSublime(true);
+    setSublimeError(null);
+
+    try {
+      const response = await fetch('/api/open-in-sublime', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
+      }
+    } catch (err) {
+      console.error('Failed to open file in Sublime Text:', err);
+      setSublimeError(err.message || 'Failed to open file in Sublime Text');
+    } finally {
+      setOpeningInSublime(false);
+    }
   };
 
   const saveNewSlackChannel = async (channelName) => {
@@ -287,6 +313,19 @@ export default function NoteForm({ noteTemplate, slackNoteTemplate, slackChannel
                   <div className="text-sm mt-2">
                     {selectedFile.entityType}.{selectedFile.entityName}.{selectedFile.entityAspect}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenInSublime(selectedFile.fileName)}
+                    disabled={openingInSublime}
+                    className={`mt-3 px-3 py-2 rounded-md text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      openingInSublime ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    {openingInSublime ? 'Opening...' : 'Open in Sublime Text'}
+                  </button>
+                  {sublimeError && (
+                    <div className="mt-2 text-sm text-red-600">{sublimeError}</div>
+                  )}
                 </div>
               )}
               
